@@ -1,8 +1,10 @@
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
+from web.settings import EMAIL_HOST_USER
 import requests
 from . import forms
 from . import models
+from django.core.mail import send_mail
 
 # Create your views here.
 
@@ -59,11 +61,19 @@ def register(request):
                     # Setting Redirect and adding token to cookies
                     html = redirect('Dashboard')
                     html.set_cookie('token', token)
+                    sendWelcomeEmail(data)
                     return html
 
         else:
             form = forms.RegisterForm()
     return render(request, 'login/index.html', {'form': form, 'error': error, 'token': token})
+
+
+def sendWelcomeEmail(data):
+    subject = 'Welcome to our website, ' + data['name']
+    receiver = data['email']
+    message = 'Hope you have a nice stay!'
+    send_mail(subject, message, EMAIL_HOST_USER, [receiver], fail_silently=False)
 
 def login(request):
     if request.COOKIES.get('token'):

@@ -27,6 +27,11 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
+EMAIL_HOST = 'smtp.sendgrid.net'
+EMAIL_PORT = 587
+EMAIL_HOST_USER = 'apikey'
+EMAIL_HOST_PASSWORD = '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'
+EMAIL_USE_TLS = True
 
 # Application definition
 
