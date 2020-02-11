@@ -9,10 +9,14 @@ class UserDetails(AbstractBaseUser):
     password = models.CharField(max_length=40)
     phone = models.CharField(max_length=13)
     email = models.EmailField()
+    token = models.CharField(max_length=100)
 
     USERNAME_FIELD = 'username'
     REQUIRED_FIELDS = []
 
-    def addtoDB(self, user, passw):
-        add = self(username=user, password=passw)
+    def addtoDB(self, user, passw, phone, email):
+        add = UserDetails(username=user, password=passw, phone=phone, email=email)
         add.save()
+
+    def delete_everything():
+        UserDetails.objects.all().delete()
