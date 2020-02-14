@@ -23,14 +23,7 @@ class Registration(APIView):
         user.save()
         print(user.email)
         token = Token.objects.create(user=user)
-        return Response({'token': token.key})
-        '''if data['user'] == 'Nikita' and data['pass'] == '112233':
-            user = models.UserDetails(username=data['user'], password=data['pass'])
-            user.save()
-            token = Token.objects.create(user=user)
-            return Response({'token': token.key})
-        else:
-            return Response({'error': 'Invalid'})'''
+        return Response({"token": token.key})
 
 
 class TokenGen(APIView):

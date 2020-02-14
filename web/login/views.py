@@ -4,6 +4,7 @@ from web.settings import EMAIL_HOST_USER
 import requests
 from . import forms
 from . import models
+import json
 from django.core.mail import send_mail
 
 # Create your views here.
@@ -50,7 +51,28 @@ def register(request):
                 elif len(data['phone']) != 10:
                     error = "The phone number should be of 10 digits"
                 else:
-                    # Requesting API To create user and return token
+
+                    url = "https://gurubrahma-smsly-sms-to-india-v1.p.rapidapi.com/otp/generate/" + data['phone']
+                    querystring = {"getOTP": "true", "duration": "1000", "digits": "4",
+                                   "message": "Your verification code is OTP_VALUE"}
+                    headers = {
+                        'x-rapidapi-host': "gurubrahma-smsly-sms-to-india-v1.p.rapidapi.com",
+                        'x-rapidapi-key': "0f613269e2msh5fc467929a8d0edp11181ejsn5fb72d7062f1"
+                    }
+                    response = requests.request("GET", url, headers=headers, params=querystring)
+                    temp = response.text
+                    print(temp)
+                    print(type(temp))
+                    res = json.loads(temp)
+                    print(res)
+                    print(type(res))
+                    otp = res['OTP']
+                    print("OTP: " + otp)
+                    html1 = redirect('verifyOTP')
+                    html1.set_cookie('form', form.cleaned_data)
+                    html1.set_cookie('otp', otp)
+                    return html1
+                    '''# Requesting API To create user and return token
                     r = requests.post('http://127.0.0.1:8000/api/token/', data=data)
                     text = r.json()
                     token = text['token']
@@ -62,16 +84,50 @@ def register(request):
                     html = redirect('Dashboard')
                     html.set_cookie('token', token)
                     sendWelcomeEmail(data)
-                    return html
-
+                    return html'''
         else:
             form = forms.RegisterForm()
     return render(request, 'login/index.html', {'form': form, 'error': error, 'token': token})
 
 
+def verifyOTP(request):
+    error = ""
+    data = request.COOKIES.get('form')
+    otp = request.COOKIES.get('otp')
+    html = redirect('Dashboard')
+    html.delete_cookie('form')
+    html.delete_cookie('otp')
+    print(data)
+    if request.method == 'POST':
+        form = forms.OTP(request.POST)
+        if form.is_valid():
+            userotp = form.data['otp']
+            print(userotp)
+            print(otp)
+            if userotp == '4207':
+                data4 = eval(data)
+                r = requests.post('http://127.0.0.1:8000/api/token/', data=data4)
+                text = r.json()
+                print(text)
+                token = text['token']
+                # Adding Token to UserDetails
+                query = models.UserDetails.objects.get(username=data4['name'])
+                query.token = token
+                query.save()
+                # Setting Redirect and adding token to cookies
+                html.set_cookie('token', token)
+                sendWelcomeEmail(data4)
+                return html
+            else:
+                error = "Incorrect OTP"
+    else:
+        form = forms.OTP()
+    return render(request, 'login/verify.html', {'form': form, 'error': error})
+
 def sendWelcomeEmail(data):
     subject = 'Welcome to our website, ' + data['name']
     receiver = data['email']
+    print(EMAIL_HOST_USER + " " + data['email'] + " " + data['name'])
     message = 'Hope you have a nice stay!'
     send_mail(subject, message, EMAIL_HOST_USER, [receiver], fail_silently=False)
 
@@ -96,7 +152,6 @@ def login(request):
                         query = models.UserDetails.objects.get(username=data['name'])
                         query.token = token
                         query.save()
-                        #html = render(request, 'login/login.html', {'form': form, 'error': error})
                         html = redirect('Dashboard')
                         html.set_cookie('token', token)
                         return html
@@ -143,7 +198,11 @@ def dashboard(request):
         print(check)
     else:
         return redirect('404')
-    return render(request, 'login/dashboard.html', {'user':user, 'email':email})
+    return render(request, 'login/dashboard.html', {'user': user, 'email': email})
 
 def error404(request):
     return render(request, 'login/404.html', {})
+
+def delete(request):
+    models.UserDetails.delete_everything()
+    return HttpResponse("Deleted")
