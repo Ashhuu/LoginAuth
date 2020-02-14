@@ -6,6 +6,7 @@ from . import forms
 from . import models
 import json
 from django.core.mail import send_mail
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
 
 # Create your views here.
 
@@ -72,19 +73,6 @@ def register(request):
                     html1.set_cookie('form', form.cleaned_data)
                     html1.set_cookie('otp', otp)
                     return html1
-                    '''# Requesting API To create user and return token
-                    r = requests.post('http://127.0.0.1:8000/api/token/', data=data)
-                    text = r.json()
-                    token = text['token']
-                    # Adding Token to UserDetails
-                    query = models.UserDetails.objects.get(username=data['name'])
-                    query.token = token
-                    query.save()
-                    # Setting Redirect and adding token to cookies
-                    html = redirect('Dashboard')
-                    html.set_cookie('token', token)
-                    sendWelcomeEmail(data)
-                    return html'''
         else:
             form = forms.RegisterForm()
     return render(request, 'login/index.html', {'form': form, 'error': error, 'token': token})
@@ -130,6 +118,15 @@ def sendWelcomeEmail(data):
     print(EMAIL_HOST_USER + " " + data['email'] + " " + data['name'])
     message = 'Hope you have a nice stay!'
     send_mail(subject, message, EMAIL_HOST_USER, [receiver], fail_silently=False)
+
+def sendForgotEmail(data, token):
+    subject = 'Seems like you have forgot your password, ' + data['username']
+    receiver = data['email']
+    print(EMAIL_HOST_USER + " " + data['email'] + " " + data['username'])
+    url = 'http://127.0.0.1:8000/activate/' + token + '/' + data['token']
+    message = 'Your reset link is as follows:/n/n' + url
+    send_mail(subject, message, EMAIL_HOST_USER, [receiver], fail_silently=False)
+    return True
 
 def login(request):
     if request.COOKIES.get('token'):
@@ -180,6 +177,71 @@ def logout(request):
     else:
         print("Could not find any token")
         return redirect('Login')
+
+
+def activate(request, token, ptoken):
+    details = models.UserDetails.objects.get(token=ptoken)
+    pr = PasswordResetTokenGenerator()
+    check = pr.check_token(details, token)
+    if check == True:
+        html1 = redirect('resetPassword')
+        html1.set_cookie('tempdata', ptoken)
+        return html1
+    else:
+        return HttpResponse("Not working")
+
+
+def resetPassword(request):
+    if request.COOKIES.get('tempdata'):
+        token = request.COOKIES.get('tempdata')
+        form = forms.ResetPass()
+        html = render(request, 'login/reset.html', {'form': form})
+        html.delete_cookie('tempdata')
+        details = models.UserDetails.objects.get(token=token)
+        if request.method == 'POST':
+            form = forms.ResetPass(request.POST)
+            if form.is_valid():
+                data = form.cleaned_data
+                if data['password'] == data['confirm']:
+                    details.password = data['password']
+                    details.save()
+        else:
+            form = forms.ResetPass()
+        return html
+    else:
+        redirect('Login')
+
+def forgot(request):
+    error = ""
+    title = "Recover Password"
+    if request.method == 'POST':
+        form = forms.ForgotPass(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data['email']
+            checkEmail = models.UserDetails.objects.filter(email=email).exists()
+            if checkEmail == True:
+                data = models.UserDetails.objects.filter(email=email).values()
+                user = models.UserDetails.objects.get(email=email)
+                pr = PasswordResetTokenGenerator()
+                resetToken = pr.make_token(user)
+                print("This is " + resetToken)
+                check = pr.check_token(user, resetToken)
+                print("The check is ", check)
+                details = data[0]
+                print(details)
+                state = sendForgotEmail(details, resetToken)
+                if state == True:
+                    title = "Reset link set"
+                else:
+                    title = "Error sending email"
+            else:
+                error = "The Email does not exist"
+    else:
+        form = forms.ForgotPass()
+    return render(request, 'login/forgot.html', {'form': form, 'error': error, 'title': title})
+
+
+
 
 
 def dashboard(request):
