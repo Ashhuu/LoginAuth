@@ -11,7 +11,7 @@ class RegisterForm(forms.Form):
 
 class LoginForm(forms.Form):
     name = forms.CharField(label="Name",max_length=50, widget=forms.TextInput(attrs={'placeholder': 'Username'}))
-    password = forms.CharField(label="Name", max_length=50, widget=forms.TextInput(attrs={'placeholder': 'Password'}))
+    password = forms.CharField(label="Name", max_length=50, widget=forms.TextInput(attrs={'placeholder': 'Password', 'type': 'password'}))
 
 class OTP(forms.Form):
     otp = forms.IntegerField(label="OTP", widget=forms.TextInput(attrs={'placeholder': 'Insert OTP'}))

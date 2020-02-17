@@ -7,6 +7,7 @@ from . import models
 import json
 from django.core.mail import send_mail
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.contrib.auth.hashers import make_password, check_password
 from datetime import datetime, timedelta
 
 # Create your views here.
@@ -57,17 +58,13 @@ def register(request):
                         'x-rapidapi-host': "gurubrahma-smsly-sms-to-india-v1.p.rapidapi.com",
                         'x-rapidapi-key': "0f613269e2msh5fc467929a8d0edp11181ejsn5fb72d7062f1"
                     }
+                    data['password'] = make_password(data['password'])
                     response = requests.request("GET", url, headers=headers, params=querystring)
                     temp = response.text
-                    print(temp)
-                    print(type(temp))
                     res = json.loads(temp)
-                    print(res)
-                    print(type(res))
                     otp = res['OTP']
-                    print("OTP: " + otp)
                     html1 = redirect('verifyOTP')
-                    html1.set_cookie('form', form.cleaned_data)
+                    html1.set_cookie('form', data)
                     html1.set_cookie('otp', otp)
                     return html1
         else:
@@ -139,7 +136,8 @@ def login(request):
                 if checkUser == True:
                     query = models.UserDetails.objects.filter(username=data['name']).values()
                     row = query[0]
-                    if row['password'] == data['password']:
+                    check = check_password(data['password'], row['password'])
+                    if check == True:
                         r = requests.post('http://127.0.0.1:8000/api/gentoken/', data=data)
                         text = r.json()
                         token = text['token']
@@ -215,7 +213,7 @@ def resetPassword(request):
             else:
                 return redirect('Login')
             if data['password'] == data['confirm']:
-                details.password = data['password']
+                details.password = make_password(data['password'])
                 details.save()
             elif data['password'] != data['confirm']:
                 error = "password does not match"
@@ -285,7 +283,8 @@ def error404(request):
     return render(request, 'login/404.html', {})
 
 def delete(request):
-    models.UserDetails.delete_everything()
+    ud = models.UserDetails()
+    ud.delete_everything()
     return HttpResponse("Deleted")
 
 def tokenValidity(token):
