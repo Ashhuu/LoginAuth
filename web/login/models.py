@@ -18,5 +18,11 @@ class UserDetails(AbstractBaseUser):
         add = UserDetails(username=user, password=passw, phone=phone, email=email)
         add.save()
 
-    def delete_everything():
+    def delete_everything(self):
         UserDetails.objects.all().delete()
+
+
+class ResetTokens(models.Model):
+    token = models.CharField(max_length=40)
+    time = models.DateTimeField()
+    status = models.BooleanField(max_length=0)

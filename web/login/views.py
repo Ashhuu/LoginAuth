@@ -7,22 +7,19 @@ from . import models
 import json
 from django.core.mail import send_mail
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from datetime import datetime, timedelta
 
 # Create your views here.
 
 
 def home(request):
     url = "http://127.0.0.1:8000/api-token-auth/"
-
     querystring = {"username": "ashhuu27", "password": "112233"}
-
     headers = {
         'x-rapidapi-host': "gurubrahma-smsly-sms-to-india-v1.p.rapidapi.com",
         'x-rapidapi-key': "0f613269e2msh5fc467929a8d0edp11181ejsn5fb72d7062f1"
     }
-
     response = requests.request("GET", url, headers=headers, params=querystring)
-
     print(response.text)
     return HttpResponse("Hello")
 
@@ -92,7 +89,7 @@ def verifyOTP(request):
             userotp = form.data['otp']
             print(userotp)
             print(otp)
-            if userotp == '4207':
+            if userotp == otp:
                 data4 = eval(data)
                 r = requests.post('http://127.0.0.1:8000/api/token/', data=data4)
                 text = r.json()
@@ -124,7 +121,7 @@ def sendForgotEmail(data, token):
     receiver = data['email']
     print(EMAIL_HOST_USER + " " + data['email'] + " " + data['username'])
     url = 'http://127.0.0.1:8000/activate/' + token + '/' + data['token']
-    message = 'Your reset link is as follows:/n/n' + url
+    message = 'Your reset link is as follows: ' + url
     send_mail(subject, message, EMAIL_HOST_USER, [receiver], fail_silently=False)
     return True
 
@@ -180,36 +177,54 @@ def logout(request):
 
 
 def activate(request, token, ptoken):
-    details = models.UserDetails.objects.get(token=ptoken)
-    pr = PasswordResetTokenGenerator()
-    check = pr.check_token(details, token)
-    if check == True:
-        html1 = redirect('resetPassword')
-        html1.set_cookie('tempdata', ptoken)
-        return html1
+    checkuser = models.UserDetails.objects.filter(token=ptoken).exists()
+    checktoken = models.ResetTokens.objects.filter(token=token).exists()
+    status = models.ResetTokens.objects.get(token=token)
+    if status.status == 0:
+        return HttpResponse("Link Expired")
+    validity = tokenValidity(token)
+    if validity == False:
+        status.status = 0
+        status.save()
+        return HttpResponse("Link Expired")
+    if checkuser == True and checktoken == True:
+        details = models.UserDetails.objects.get(token=ptoken)
+        pr = PasswordResetTokenGenerator()
+        check = pr.check_token(details, token)
+        if check == True:
+            html1 = redirect('resetPassword')
+            html1.set_cookie('tempdata', ptoken)
+            return html1
+        else:
+            return HttpResponse("Reset token invalid or expired. Please try resetting password again")
     else:
-        return HttpResponse("Not working")
+        return HttpResponse("Invalid Request: User or Token not found")
 
 
 def resetPassword(request):
-    if request.COOKIES.get('tempdata'):
-        token = request.COOKIES.get('tempdata')
+    if request.method == 'POST':
+        form = forms.ResetPass(request.POST)
+        if form.is_valid():
+            data = form.cleaned_data
+            if request.COOKIES.get('tempdata'):
+                token = request.COOKIES.get('tempdata')
+                form = forms.ResetPass()
+                html = render(request, 'login/reset.html', {'form': form})
+                html.delete_cookie('tempdata')
+                details = models.UserDetails.objects.get(token=token)
+            else:
+                return redirect('Login')
+            if data['password'] == data['confirm']:
+                details.password = data['password']
+                details.save()
+            elif data['password'] != data['confirm']:
+                error = "password does not match"
+                html = render(request, 'login/reset.html', {'form': form, 'error': error})
+    else:
         form = forms.ResetPass()
         html = render(request, 'login/reset.html', {'form': form})
-        html.delete_cookie('tempdata')
-        details = models.UserDetails.objects.get(token=token)
-        if request.method == 'POST':
-            form = forms.ResetPass(request.POST)
-            if form.is_valid():
-                data = form.cleaned_data
-                if data['password'] == data['confirm']:
-                    details.password = data['password']
-                    details.save()
-        else:
-            form = forms.ResetPass()
-        return html
-    else:
-        redirect('Login')
+    return html
+
 
 def forgot(request):
     error = ""
@@ -225,8 +240,15 @@ def forgot(request):
                 pr = PasswordResetTokenGenerator()
                 resetToken = pr.make_token(user)
                 print("This is " + resetToken)
-                check = pr.check_token(user, resetToken)
-                print("The check is ", check)
+                checkToken = models.ResetTokens.objects.filter(token=resetToken).exists()
+                if checkToken == True:
+                    dataToken = models.ResetTokens.objects.get(token=resetToken)
+                    dataToken.status = 1
+                    dataToken.time = datetime.now()
+                    dataToken.save()
+                else:
+                    tokenAdd = models.ResetTokens(token=resetToken, status=1, time=datetime.now())
+                    tokenAdd.save()
                 details = data[0]
                 print(details)
                 state = sendForgotEmail(details, resetToken)
@@ -239,9 +261,6 @@ def forgot(request):
     else:
         form = forms.ForgotPass()
     return render(request, 'login/forgot.html', {'form': form, 'error': error, 'title': title})
-
-
-
 
 
 def dashboard(request):
@@ -268,3 +287,17 @@ def error404(request):
 def delete(request):
     models.UserDetails.delete_everything()
     return HttpResponse("Deleted")
+
+def tokenValidity(token):
+    data = models.ResetTokens.objects.filter(token=token).values()
+    validTime = (data[0])['time']
+    datenow = datetime.now()
+    timeAdd = validTime + timedelta(minutes=15)
+    if validTime.date() < datenow.date():
+        print("Token Expired - Date Changed")
+        return False
+    else:
+        if datenow.time() > timeAdd.time():
+            print("It is more than 15 minutes")
+            return False
+    return True
